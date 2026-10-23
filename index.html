@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nine Men's Morris - Online Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Nine Men's Morris (Nine Mils)</h1>
+        
+        <div class="status-bar">
+            <p id="turn-indicator">Player 1 (Red) ki Baari Hai</p>
+        </div>
+
+        <!-- Game Board Canvas -->
+        <canvas id="gameBoard" width="500" height="500"></canvas>
+
+        <div class="controls">
+            <button onclick="resetGame()">Reset Game</button>
+        </div>
+    </div>
+
+    <!-- Socket.io aur Game Script -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
