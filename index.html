@@ -3,28 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nine Men's Morris - Online Game</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Nine Men's Morris - Real Money Gaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0f172a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        h2 { text-align: center; color: #38bdf8; }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            box-sizing: border-box;
+        }
+        button {
+            background: #0284c7;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #0369a1; }
+        .hidden { display: none; }
+        .wallet-box { background: #0f172a; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 15px; }
+        .msg { text-align: center; font-size: 14px; margin-top: 5px; }
+    </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Nine Men's Morris (Nine Mils)</h1>
-        
-        <div class="status-bar">
-            <p id="turn-indicator">Player 1 (Red) ki Baari Hai</p>
-        </div>
+    <h1>Nine Men's Morris Gaming</h1>
 
-        <!-- Game Board Canvas -->
-        <canvas id="gameBoard" width="500" height="500"></canvas>
-
-        <div class="controls">
-            <button onclick="resetGame()">Reset Game</button>
-        </div>
+    <!-- Auth Section (Login / Signup) -->
+    <div id="auth-container" class="container">
+        <h2 id="form-title">Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="handleAuth()">Submit</button>
+        <p class="msg" id="auth-msg"></p>
+        <p style="text-align: center; cursor: pointer; color: #38bdf8;" onclick="toggleAuthMode()">Don't have an account? Sign up</p>
     </div>
 
-    <!-- Socket.io aur Game Script -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+    <!-- Dashboard Section (Wallet & Deposit) -->
+    <div id="dashboard-container" class="container hidden">
+        <h2>Player Dashboard</h2>
+        <div class="wallet-box">
+            <h3>Wallet Balance</h3>
+            <p style="font-size: 24px; color: #4ade80;" id="user-balance">$0.00</p>
+            <p id="welcome-user" style="color: #94a3b8;"></p>
+        </div>
+
+        <h3>Deposit Funds ($1 - $50,000)</h3>
+        <select id="deposit-method">
+            <option value="Easypaisa">Easypaisa</option>
+            <option value="JazzCash">JazzCash</option>
+            <option value="Bank">Bank Transfer</option>
+        </select>
+        <input type="number" id="deposit-amount" placeholder="Amount ($1 - $50,000)" min="1" max="50000">
+        <input type="text" id="transaction-id" placeholder="Transaction ID / Receipt No">
+        <button onclick="submitDeposit()">Submit Deposit Request</button>
+        <p class="msg" id="deposit-msg"></p>
+        
+        <button style="background: #ef4444; margin-top: 20px;" onclick="logout()">Logout</button>
+    </div>
+
+    <script>
+        let isSignup = false;
+        let loggedInUser = '';
+
+        function toggleAuthMode() {
+            isSignup = !isSignup;
+            document.getElementById('form-title').innerText = isSignup ? 'Sign Up' : 'Login';
+            document.getElementById('auth-msg').innerText = '';
+        }
+
+        async function handleAuth() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const endpoint = isSignup ? '/api/signup' : '/api/login';
+
+            if (!username || !password) {
+                document.getElementById('auth-msg').innerText = 'Please fill all fields';
+                document.getElementById('auth-msg').style.color = '#ef4444';
+                return;
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    if (isSignup) {
+                        document.getElementById('auth-msg').innerText = 'Registered successfully! Please login.';
+                        document.getElementById('auth-msg').style.color = '#4ade80';
+                        toggleAuthMode();
+                    } else {
+                        loggedInUser = username;
+                        document.getElementById('welcome-user').innerText = `Welcome, ${username}`;
+                        document.getElementById('user-balance').innerText = `$${data.balance || 0}`;
+                        document.getElementById('auth-container').classList.add('hidden');
+                        document.getElementById('dashboard-container').classList.remove('hidden');
+                    }
+                } else {
+                    document.getElementById('auth-msg').innerText = data.message || 'Error occurred';
+                    document.getElementById('auth-msg').style.color = '#ef4444';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function submitDeposit() {
+            const method = document.getElementById('deposit-method').value;
+            const amount = Number(document.getElementById('deposit-amount').value);
+            const transactionId = document.getElementById('transaction-id').value;
+            const msgEl = document.getElementById('deposit-msg');
+
+            if (!amount || !transactionId) {
+                msgEl.innerText = 'Please enter amount and transaction ID';
+                msgEl.style.color = '#ef4444';
+                return;
+            }
+
+            if (amount < 1 || amount > 50000) {
+                msgEl.innerText = 'Amount must be between $1 and $50,000';
+                msgEl.style.color = '#ef4444';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/deposit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: loggedInUser, method, amount, transactionId })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    msgEl.innerText = data.message;
+                    msgEl.style.color = '#4ade80';
+                    document.getElementById('deposit-amount').value = '';
+                    document.getElementById('transaction-id').value = '';
+                } else {
+                    msgEl.innerText = data.message;
+                    msgEl.style.color = '#ef4444';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function logout() {
+            loggedInUser = '';
+            document.getElementById('dashboard-container').classList.add('hidden');
+            document.getElementById('auth-container').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+    </script>
 </body>
 </html>
