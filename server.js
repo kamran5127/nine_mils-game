@@ -1,45 +1,35 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static(__dirname));
-
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
+app.use(express.static(path.join(__dirname)));
 
 // MongoDB Connection
-const MONGO_URI = process.env.MONGO_URL || process.env.MONGO_URI;
-if (MONGO_URI) {
-    mongoose.connect(MONGO_URI)
-        .then(() => console.log('MongoDB Connected Successfully!'))
-        .catch(err => console.error('MongoDB Connection Error:', err));
-}
+const mongoURI = process.env.MONGO_URI || process.env.MONGO_URL;
+mongoose.connect(mongoURI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => {
+    console.log("Connected to MongoDB Atlas");
+}).catch(err => {
+    console.error("MongoDB connection error:", err);
+});
 
-// User & Wallet Schema ($1 to $50,000 limits)
+// User Schema & Model
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     balance: { type: Number, default: 0 }
 });
-const User = mongoose.model('User', userSchema);
 
-// Deposit Request Schema
-const depositSchema = new mongoose.Schema({
-    username: { type: String, required: true },
-    method: { type: String, required: true },
-    amount: { type: Number, required: true, min: 1, max: 50000 },
-    transactionId: { type: String, required: true },
-    status: { type: String, default: 'Pending' },
-    createdAt: { type: Date, default: Date.now }
-});
-const Deposit = mongoose.model('Deposit', depositSchema);
+const User = mongoose.model('User', userSchema);
 
 // Sign-up Route
 app.post('/api/signup', async (req, res) => {
@@ -52,10 +42,9 @@ app.post('/api/signup', async (req, res) => {
         const newUser = new User({ username, password, balance: 0 });
         await newUser.save();
         res.json({ success: true, message: 'User registered successfully!' });
-     } catch (error) {
+    } catch (error) {
         console.error("Error details:", error);
         res.status(500).json({ success: false, message: error.message });
-    }
     }
 });
 
@@ -69,56 +58,34 @@ app.post('/api/login', async (req, res) => {
         }
         res.json({ success: true, message: 'Login successful', balance: user.balance, username: user.username });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Error details:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// Deposit Request Route
-app.post('/api/deposit', async (req, res) => {
-    try {
-        const { username, method, amount, transactionId } = req.body;
-        if (amount < 1 || amount > 50000) {
-            return res.status(400).json({ success: false, message: 'Amount must be between $1 and $50,000' });
-        }
-        const newDeposit = new Deposit({ username, method, amount, transactionId, status: 'Pending' });
-        await newDeposit.save();
-        res.json({ success: true, message: 'Deposit request submitted successfully!' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Socket.io Game Matchmaking & Moves
+// Socket.io Matchmaking & Game Logic
 let waitingPlayer = null;
 
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('A user connected:', socket.id);
 
-    socket.on('find-game', (username) => {
-        if (waitingPlayer && waitingPlayer.id !== socket.id) {
-            // Match found! Create a room
+    socket.on('find_match', (data) => {
+        if (waitingPlayer) {
+            // Match found
             const roomName = `room_${waitingPlayer.id}_${socket.id}`;
             socket.join(roomName);
             waitingPlayer.join(roomName);
 
-            io.to(roomName).emit('game-start', {
-                room: roomName,
-                player1: waitingPlayer.username,
-                player2: username
-            });
+            io.to(roomName).emit('match_found', { room: roomName, message: 'Match started!' });
             waitingPlayer = null;
         } else {
-            waitingPlayer = { id: socket.id, username, join: (r) => socket.join(r) };
-            socket.emit('waiting', 'Looking for an opponent...');
+            waitingPlayer = socket;
+            socket.emit('waiting', { message: 'Looking for an opponent...' });
         }
     });
 
-    socket.on('make-move', (data) => {
-        socket.to(data.room).emit('move-made', data);
-    });
-
     socket.on('disconnect', () => {
-        if (waitingPlayer && waitingPlayer.id === socket.id) {
+        if (waitingPlayer === socket) {
             waitingPlayer = null;
         }
         console.log('User disconnected:', socket.id);
