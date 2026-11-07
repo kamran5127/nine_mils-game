@@ -8,7 +8,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(__dirname));
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGO_URL || process.env.MONGO_URI;
