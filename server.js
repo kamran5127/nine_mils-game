@@ -52,8 +52,10 @@ app.post('/api/signup', async (req, res) => {
         const newUser = new User({ username, password, balance: 0 });
         await newUser.save();
         res.json({ success: true, message: 'User registered successfully!' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+     } catch (error) {
+        console.error("Error details:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
     }
 });
 
