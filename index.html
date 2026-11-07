@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nine Men's Morris - Real Money Gaming</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,7 +21,7 @@
             padding: 20px;
             border-radius: 10px;
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             margin-bottom: 20px;
         }
@@ -45,13 +46,34 @@
         .hidden { display: none; }
         .wallet-box { background: #0f172a; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 15px; }
         .msg { text-align: center; font-size: 14px; margin-top: 5px; }
+        
+        /* Game Board Styling */
+        #game-board {
+            width: 300px;
+            height: 300px;
+            background: #334155;
+            margin: 20px auto;
+            position: relative;
+            border: 2px solid #38bdf8;
+        }
+        .node {
+            width: 25px;
+            height: 25px;
+            background: #94a3b8;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+        .node.player1 { background: #ef4444; }
+        .node.player2 { background: #4ade80; }
     </style>
 </head>
 <body>
 
     <h1>Nine Men's Morris Gaming</h1>
 
-    <!-- Auth Section (Login / Signup) -->
+    <!-- Auth Section -->
     <div id="auth-container" class="container">
         <h2 id="form-title">Login</h2>
         <input type="text" id="username" placeholder="Username">
@@ -61,7 +83,7 @@
         <p style="text-align: center; cursor: pointer; color: #38bdf8;" onclick="toggleAuthMode()">Don't have an account? Sign up</p>
     </div>
 
-    <!-- Dashboard Section (Wallet & Deposit) -->
+    <!-- Dashboard & Deposit Section -->
     <div id="dashboard-container" class="container hidden">
         <h2>Player Dashboard</h2>
         <div class="wallet-box">
@@ -80,13 +102,24 @@
         <input type="text" id="transaction-id" placeholder="Transaction ID / Receipt No">
         <button onclick="submitDeposit()">Submit Deposit Request</button>
         <p class="msg" id="deposit-msg"></p>
-        
-        <button style="background: #ef4444; margin-top: 20px;" onclick="logout()">Logout</button>
+
+        <button style="background: #10b981; margin-top: 15px;" onclick="startMatchmaking()">Find Online Match</button>
+        <button style="background: #ef4444; margin-top: 10px;" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Game Room Section -->
+    <div id="game-container" class="container hidden">
+        <h2>Multiplayer Game</h2>
+        <p class="msg" id="game-status">Connecting...</p>
+        <div id="game-board"></div>
+        <button style="background: #ef4444;" onclick="leaveGame()">Exit Game</button>
     </div>
 
     <script>
+        const socket = io();
         let isSignup = false;
         let loggedInUser = '';
+        let currentRoom = '';
 
         function toggleAuthMode() {
             isSignup = !isSignup;
@@ -129,9 +162,7 @@
                     document.getElementById('auth-msg').innerText = data.message || 'Error occurred';
                     document.getElementById('auth-msg').style.color = '#ef4444';
                 }
-            } catch (err) {
-                console.error(err);
-            }
+            } catch (err) { console.error(err); }
         }
 
         async function submitDeposit() {
@@ -146,12 +177,6 @@
                 return;
             }
 
-            if (amount < 1 || amount > 50000) {
-                msgEl.innerText = 'Amount must be between $1 and $50,000';
-                msgEl.style.color = '#ef4444';
-                return;
-            }
-
             try {
                 const response = await fetch('/api/deposit', {
                     method: 'POST',
@@ -159,27 +184,50 @@
                     body: JSON.stringify({ username: loggedInUser, method, amount, transactionId })
                 });
                 const data = await response.json();
+                msgEl.innerText = data.message;
+                msgEl.style.color = data.success ? '#4ade80' : '#ef4444';
+            } catch (err) { console.error(err); }
+        }
 
-                if (data.success) {
-                    msgEl.innerText = data.message;
-                    msgEl.style.color = '#4ade80';
-                    document.getElementById('deposit-amount').value = '';
-                    document.getElementById('transaction-id').value = '';
-                } else {
-                    msgEl.innerText = data.message;
-                    msgEl.style.color = '#ef4444';
-                }
-            } catch (err) {
-                console.error(err);
+        function startMatchmaking() {
+            document.getElementById('dashboard-container').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            document.getElementById('game-status').innerText = 'Searching for an opponent...';
+            socket.emit('find-game', loggedInUser);
+        }
+
+        socket.on('waiting', (msg) => {
+            document.getElementById('game-status').innerText = msg;
+        });
+
+        socket.on('game-start', (data) => {
+            currentRoom = data.room;
+            document.getElementById('game-status').innerText = `Match Started! ${data.player1} vs ${data.player2}`;
+            setupBoard();
+        });
+
+        function setupBoard() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            // Simple visual nodes setup for test
+            for (let i = 0; i < 9; i++) {
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.style.top = `${20 + (i * 30)}px`;
+                node.style.left = `${20 + (i * 25)}px`;
+                board.appendChild(node);
             }
+        }
+
+        function leaveGame() {
+            document.getElementById('game-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
         }
 
         function logout() {
             loggedInUser = '';
             document.getElementById('dashboard-container').classList.add('hidden');
             document.getElementById('auth-container').classList.remove('hidden');
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
         }
     </script>
 </body>
